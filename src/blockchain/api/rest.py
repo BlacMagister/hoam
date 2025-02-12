@@ -1,52 +1,67 @@
-from fastapi import FastAPI, APIRouter
-from fastapi.responses import ORJSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, APIRouter, HTTPException, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 import uvicorn
+from typing import List
 
 app = FastAPI(
-    title="Blockchain Node API",
-    version="1.0.0",
-    default_response_class=ORJSONResponse,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    title="Enterprise Blockchain API",
+    description="Production-grade blockchain interface",
+    version="2.1.0",
+    docs_url="/explorer",
+    redoc_url=None
 )
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter()
+api_key_header = APIKeyHeader(name="X-API-KEY")
 
 class TransactionRequest(BaseModel):
     sender: str
     receiver: str
     amount: float
     signature: str
+    nonce: int
 
-@router.get("/chain", tags=["Blockchain"])
-async def get_chain(limit: int = 10):
-    return {"height": chain.height, "blocks": chain.get_last_blocks(limit)}
+class BlockResponse(BaseModel):
+    hash: str
+    height: int
+    miner: str
+    timestamp: float
+    difficulty: int
 
-@router.post("/transactions", tags=["Transactions"])
-async def submit_transaction(tx: TransactionRequest):
-    if chain.add_transaction(tx):
+@router.get("/blocks/latest", response_model=BlockResponse)
+async def get_latest_block():
+    latest_block = blockchain.get_latest_block()
+    return {
+        "hash": latest_block.hash.hex(),
+        "height": blockchain.height,
+        "miner": latest_block.get_miner_address(),
+        "timestamp": latest_block.header.timestamp,
+        "difficulty": latest_block.header.difficulty
+    }
+
+@router.post("/transactions", status_code=202)
+async def submit_transaction(tx: TransactionRequest, 
+                           api_key: str = Security(api_key_header)):
+    if not validate_api_key(api_key):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    if blockchain.submit_transaction(tx.dict()):
         return {"status": "queued"}
-    return {"status": "rejected"}
+    raise HTTPException(status_code=400, detail="Invalid transaction")
 
-@router.get("/network", tags=["Network"])
-async def get_network_info():
-    return {"peers": network.peers, "protocols": network.protocols}
+@router.get("/network/peers", response_model=List[str])
+async def get_connected_peers():
+    return p2p_network.get_active_peers()
 
-app.include_router(router)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
+app.include_router(router, prefix="/api/v2")
 
-if __name__ == "__main__":
+def run_server(host: str = "0.0.0.0", port: int = 8080):
     uvicorn.run(
         app,
-        host="0.0.0.0",
-        port=8080,
-        log_config="log_conf.yaml",
+        host=host,
+        port=port,
+        ssl_keyfile="./key.pem",
+        ssl_certfile="./cert.pem",
         timeout_keep_alive=300
     )
