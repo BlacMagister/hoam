@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  node1:
+    build: .
+    command: --mode=validator --port=8080
+    environment:
+      - NETWORK_SEEDS=node2,node3
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/node1:/data
+
+  node2:
+    build: .
+    command: --mode=fullnode --port=8081
+    environment:
+      - NETWORK_SEEDS=node1,node3
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data/node2:/data
+
+  node3:
+    build: .
+    command: --mode=archivenode --port=8082
+    environment:
+      - NETWORK_SEEDS=node1,node2
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./data/node3:/data
