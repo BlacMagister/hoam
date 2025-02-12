@@ -1,11 +1,9 @@
 import hashlib
 import time
-import json
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 @dataclass
 class Transaction:
@@ -14,15 +12,16 @@ class Transaction:
     amount: float
     signature: bytes
 
-    def hash(self) -> bytes:
-        return hashlib.sha256(f"{self.sender}{self.receiver}{self.amount}".encode()).digest()
-
     def validate(self) -> bool:
         if self.sender == "GENESIS":
             return True
         try:
-            pub_key = load_pem_public_key(self.sender.encode())
-            pub_key.verify(self.signature, self.hash(), ec.ECDSA(hashes.SHA256()))
+            public_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), bytes.fromhex(self.sender))
+            public_key.verify(
+                self.signature,
+                f"{self.sender}{self.receiver}{self.amount}".encode(),
+                ec.ECDSA(hashes.SHA256())
+            )
             return True
         except:
             return False
@@ -34,7 +33,7 @@ class BlockHeader:
     merkle_root: str
     timestamp: float
     difficulty: int
-    nonce: int
+    nonce: int = 0
 
     def hash(self) -> str:
         data = f"{self.version}{self.previous_hash}{self.merkle_root}{self.timestamp}{self.difficulty}{self.nonce}"
@@ -47,29 +46,30 @@ class Block:
         self.hash = header.hash()
 
     def calculate_merkle_root(self) -> str:
-        hashes = [tx.hash().hex() for tx in self.transactions]
-        while len(hashes) > 1:
-            if len(hashes) % 2 != 0:
-                hashes.append(hashes[-1])
-            hashes = [hashlib.sha3_256(f"{a}{b}".encode()).hexdigest() for a, b in zip(hashes[::2], hashes[1::2])]
-        return hashes[0]
+        tx_hashes = [hashlib.sha3_256(f"{tx.sender}{tx.receiver}{tx.amount}".encode()).hexdigest() for tx in self.transactions]
+        
+        while len(tx_hashes) > 1:
+            if len(tx_hashes) % 2 != 0:
+                tx_hashes.append(tx_hashes[-1])
+            tx_hashes = [hashlib.sha3_256(f"{a}{b}".encode()).hexdigest() for a, b in zip(tx_hashes[::2], tx_hashes[1::2])]
+        
+        return tx_hashes[0] if tx_hashes else "0" * 64
 
 class Blockchain:
     def __init__(self):
         self.chain: List[Block] = []
         self.mempool: List[Transaction] = []
         self.difficulty = 4
-        self._create_genesis()
+        self._create_genesis_block()
 
-    def _create_genesis(self):
+    def _create_genesis_block(self):
         genesis_tx = Transaction("GENESIS", "0"*64, 1000000, b'')
         genesis_header = BlockHeader(
             version=1,
             previous_hash="0"*64,
-            merkle_root=genesis_tx.hash().hex(),
+            merkle_root=hashlib.sha3_256(b"genesis").hexdigest(),
             timestamp=time.time(),
-            difficulty=0,
-            nonce=0
+            difficulty=0
         )
         self.chain.append(Block(genesis_header, [genesis_tx]))
 
@@ -79,29 +79,26 @@ class Blockchain:
             return True
         return False
 
-    def mine_block(self, miner_address: str) -> Optional[Block]:
+    def mine_block(self, miner_address: str) -> None:
         if not self.mempool:
-            return None
+            return
 
         reward_tx = Transaction("GENESIS", miner_address, 10.0, b'')
         transactions = [reward_tx] + self.mempool
-        merkle_root = Block(None, transactions).calculate_merkle_root()
+        merkle_root = Block(BlockHeader(0, "", "", 0, 0), transactions).calculate_merkle_root()
 
-        previous_hash = self.chain[-1].hash
-        header = BlockHeader(
+        new_header = BlockHeader(
             version=1,
-            previous_hash=previous_hash,
+            previous_hash=self.chain[-1].hash,
             merkle_root=merkle_root,
             timestamp=time.time(),
-            difficulty=self.difficulty,
-            nonce=0
+            difficulty=self.difficulty
         )
 
         while True:
-            header_hash = header.hash()
-            if header_hash.startswith("0" * self.difficulty):
-                block = Block(header, transactions)
-                self.chain.append(block)
+            new_header.nonce += 1
+            block_hash = new_header.hash()
+            if block_hash.startswith("0" * self.difficulty):
+                self.chain.append(Block(new_header, transactions))
                 self.mempool = []
-                return block
-            header.nonce += 1
+                return
