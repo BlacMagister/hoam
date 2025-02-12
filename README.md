@@ -1,4 +1,4 @@
 ```
 git clone https://github.com/BlacMagister/hoam
-cd Hoam
+cd hoam
 ```
