@@ -1,22 +1,19 @@
-FROM python:3.10-slim-bullseye as builder
+FROM python:3.10-slim as builder
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --user --no-cache-dir -r requirements.txt
 
-FROM python:3.10-slim-bullseye as runtime
+FROM python:3.10-slim as runtime
 
 WORKDIR /app
 COPY --from=builder /root/.local /root/.local
 COPY . .
 
 ENV PATH=/root/.local/bin:$PATH
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/src
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl-dev \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
+RUN apt-get update && apt-get install -y libssl-dev
 EXPOSE 8080 4001
-CMD ["uvicorn", "src.blockchain.api.rest:app", "--host", "0.0.0.0", "--port", "8080"]
+
+CMD ["python", "-m", "uvicorn", "src.blockchain.api.rest:app", "--host", "0.0.0.0", "--port", "8080"]
