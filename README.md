@@ -7,7 +7,7 @@ source block/bin/activate
 
 
 
-# 🌌 Ultimate Blockchain Roadmap 2025-2026
+# 🌌 Ultimate Blockchain Roadmap 
 
 ## **2025 Q1: Scalability Revolution**  
 🔧 **Core Focus:** Layer-2 & Sharding  
