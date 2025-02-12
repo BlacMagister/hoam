@@ -1,20 +1,20 @@
 import requests
 import time
 
-NODE_URL = "http://localhost:5000"
+SERVER_URL = "http://localhost:5000"
 
-def simulate_mining():
+def mine_forever():
     while True:
         try:
-            response = requests.post(f"{NODE_URL}/mine", json={"data": "Block data"})
+            response = requests.post(f"{SERVER_URL}/mine", json={"data": "New Block"})
             if response.status_code == 200:
-                block = response.json()['block']
-                print(f"Mined block #{block['index']} | Hash: {block['hash']}")
+                block = response.json()
+                print(f"Mined Block #{block['index']}")
+                print(f"Hash: {block['hash']}")
         except Exception as e:
             print(f"Error: {e}")
         
-        time.sleep(5)  # Mining setiap 5 detik
+        time.sleep(10)
 
 if __name__ == '__main__':
-    print("🚀 Starting mock miner...")
-    simulate_mining()
+    mine_forever()
