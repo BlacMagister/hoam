@@ -10,7 +10,7 @@ setup(
         'python-dotenv>=1.0.0',
         'fastapi>=0.95.0',
         'uvicorn>=0.21.1',
-        'libp2p>=0.5.1',
+        'libp2p>=0.2.1',
         'pydantic>=2.0'
     ],
     entry_points={
