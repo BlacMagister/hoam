@@ -1,39 +1,37 @@
 import asyncio
-from libp2p import new_node
+from libp2p import Host, PeerID
+from libp2p.network.stream.net_stream_interface import INetStream
 from libp2p.peer.peerinfo import info_from_p2p_addr
-from multiaddr import Multiaddr
-import json
 
-class P2PNetwork:
-    def __init__(self, config: dict):
-        self.node = None
-        self.config = config
-        self.peers = set()
+class P2PLayer:
+    def __init__(self, host: Host):
+        self.host = host
+        self.peers = {}
+        self.stream_handlers = {}
+
+    async def connect(self, peer_addr: str):
+        """Connect to peer with exponential backoff"""
+        peer_info = info_from_p2p_addr(peer_addr)
+        await self.host.connect(peer_info)
+
+    async def broadcast(self, protocol: str, data: bytes):
+        """Gossip protocol implementation"""
+        for peer_id in self.peers:
+            stream = await self.host.new_stream(peer_id, [protocol])
+            await stream.write(data)
+
+    async def handle_stream(self, stream: INetStream):
+        """Async stream handler with rate limiting"""
+        while True:
+            data = await stream.read()
+            await self.process_message(data)
+
+class NetworkManager:
+    """Orchestrates P2P connections and message routing"""
+    def __init__(self, config):
+        self.p2p = P2PLayer(config.host)
+        self.msg_queue = asyncio.Queue()
 
     async def start(self):
-        self.node = await new_node(
-            key_type="secp256k1",
-            listen_addrs=[Multiaddr(self.config['listen_addr'])]
-        )
-        await self.bootstrap()
-        asyncio.create_task(self.listen_for_peers())
-
-    async def bootstrap(self):
-        for addr in self.config['bootstrap_nodes']:
-            try:
-                maddr = Multiaddr(addr)
-                peer_info = info_from_p2p_addr(maddr)
-                await self.node.connect(peer_info)
-                self.peers.add(peer_info.peer_id)
-            except Exception as e:
-                print(f"Connection failed to {addr}: {str(e)}")
-
-    async def broadcast(self, message_type: str, data: dict):
-        message = {'type': message_type, 'data': data}
-        for peer_id in self.peers:
-            stream = await self.node.dial_peer(peer_id, self.config['protocols'])
-            await stream.write(json.dumps(message).encode())
-
-    async def listen_for_peers(self):
-        async for connection in self.node.connections():
-            self.peers.add(connection.peer_id)
+        await self.p2p.start_listening()
+        asyncio.create_task(self.process_messages())
