@@ -1,23 +1,22 @@
-import hashlib
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from fastecdsa import ecdsa, keys, curve
+from hashlib import blake2b
 from typing import Tuple
 
-def generate_ec_keypair() -> Tuple[ec.EllipticCurvePrivateKey, bytes]:
-    private_key = ec.generate_private_key(ec.SECP256K1())
-    public_key = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.X962,
-        format=serialization.PublicFormat.CompressedPoint
+def generate_keypair() -> Tuple[str, str]:
+    """Generate ECDSA keypair using secp256k1"""
+    priv_key, pub_key = keys.gen_keypair(curve.secp256k1)
+    return (
+        keys.serialize_private_key(priv_key, curve=curve.secp256k1),
+        keys.serialize_public_key(pub_key, curve=curve.secp256k1)
     )
-    return private_key, public_key
 
-def derive_shared_secret(private_key: ec.EllipticCurvePrivateKey, peer_public_key: bytes) -> bytes:
-    peer_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), peer_public_key)
-    shared_key = private_key.exchange(ec.ECDH(), peer_key)
-    return HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b'blockchain-key-derivation',
-    ).derive(shared_key)
+def sign_data(private_key: str, data: bytes) -> bytes:
+    """Sign data with deterministic ECDSA"""
+    return ecdsa.sign(data, private_key, curve=curve.secp256k1, hashfunc=blake2b)
+
+def validate_signature(public_key: str, data: bytes, signature: bytes) -> bool:
+    """Verify signature with error handling"""
+    try:
+        return ecdsa.verify(signature, data, public_key, curve=curve.secp256k1)
+    except:
+        return False
