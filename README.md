@@ -1,8 +1,15 @@
 ```
 git clone https://github.com/BlacMagister/hoam
 cd hoam
+```
+```
 python3 -m venv block
+```
+```
 source block/bin/activate
+```
+```
+pip install -r requirements.txt
 ```
 
 
