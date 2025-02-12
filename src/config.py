@@ -1,0 +1,3 @@
+DIFFICULTY = 4
+PORT = 5000
+NODES = []
