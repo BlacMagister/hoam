@@ -14,28 +14,47 @@ class JSONRPCService:
 
     @method
     async def get_block(self, height: int) -> Dict[str, Any]:
-        if height < 0 or height > self.blockchain.height:
-            return {"error": "Invalid block height"}
-        return self.blockchain.chain[height].serialize()
+        try:
+            if height < 0 or height > self.blockchain.height:
+                logger.warning(f"Invalid block height requested: {height}")
+                return {"error": "Invalid block height"}
+            block_data = self.blockchain.chain[height].serialize()
+            logger.info(f"Block data retrieved for height {height}")
+            return block_data
+        except Exception as e:
+            logger.error(f"Error retrieving block data: {e}")
+            return {"error": "Internal server error"}
 
     @method
     async def submit_transaction(self, tx: Dict[str, Any]) -> Dict[str, Any]:
-        if self.mempool.add_transaction(tx):
-            return {"status": "accepted"}
-        return {"status": "rejected"}
+        try:
+            if self.mempool.add_transaction(tx):
+                logger.info("Transaction accepted")
+                return {"status": "accepted"}
+            logger.warning("Transaction rejected")
+            return {"status": "rejected"}
+        except Exception as e:
+            logger.error(f"Error submitting transaction: {e}")
+            return {"status": "error", "message": str(e)}
 
     @method
     async def get_network_info(self) -> Dict[str, Any]:
-        return {
-            "height": self.blockchain.height,
-            "difficulty": self.blockchain.difficulty,
-            "mempool_size": len(self.mempool)
-        }
+        try:
+            network_info = {
+                "height": self.blockchain.height,
+                "difficulty": self.blockchain.difficulty,
+                "mempool_size": len(self.mempool)
+            }
+            logger.info("Network info retrieved")
+            return network_info
+        except Exception as e:
+            logger.error(f"Error retrieving network info: {e}")
+            return {"error": "Internal server error"}
 
 async def rpc_handler(request):
     service = request.app['rpc_service']
-    request = await request.text()
-    response = await async_dispatch(request, methods=service)
+    request_text = await request.text()
+    response = await async_dispatch(request_text, methods=service)
     return web.json_response(response)
 
 def setup_rpc(app: web.Application, blockchain: Blockchain, mempool: Mempool):
