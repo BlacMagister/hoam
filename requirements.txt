@@ -1,7 +1,7 @@
 # Core Dependencies
 fastapi==0.109.2
 uvicorn[standard]==0.27.1
-libp2p==0.5.1
+libp2p==0.2.1
 cryptography==42.0.5
 pydantic==2.6.4
 orjson==3.10.0
